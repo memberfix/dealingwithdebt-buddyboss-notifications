@@ -176,16 +176,26 @@ class Series_Subscribe {
             return;
         }
         
+        $notifications = new Series_Subscribe_Notifications();
+        $all_series_subscriber_ids = array();
+        
         $series_terms = get_the_terms( $post_id, 'series' );
         
-        if ( empty( $series_terms ) || is_wp_error( $series_terms ) ) {
-            return;
+        if ( ! empty( $series_terms ) && ! is_wp_error( $series_terms ) ) {
+            $db = new Series_Subscribe_Database();
+            
+            foreach ( $series_terms as $series ) {
+                $series_subscriber_ids = $db->get_series_subscribers( $series->term_id );
+                if ( ! empty( $series_subscriber_ids ) ) {
+                    $all_series_subscriber_ids = array_merge( $all_series_subscriber_ids, $series_subscriber_ids );
+                    $notifications->send_series_post_notifications( $post, $series );
+                }
+            }
+            
+            $all_series_subscriber_ids = array_unique( $all_series_subscriber_ids );
         }
         
-        $notifications = new Series_Subscribe_Notifications();
-        foreach ( $series_terms as $series ) {
-            $notifications->send_series_post_notifications( $post, $series );
-        }
+        $notifications->send_author_post_notifications( $post, $all_series_subscriber_ids );
     }
 
     /**
