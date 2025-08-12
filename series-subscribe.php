@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: Series Subscribe
+ * Plugin Name: Series and Author Subscribe
  * Plugin URI: https://memberfix.rocks
- * Description: Allow users to subscribe to series and receive BuddyBoss notifications when new posts are published in subscribed series.
- * Version: 1.0.0
+ * Description: Allow users to subscribe to series and authors to receive BuddyBoss notifications when new posts are published in subscribed series, or from authors they follow.
+ * Version: 1.1
  * Author: Memberfix
  * Text Domain: series-subscribe
  * Domain Path: /languages
