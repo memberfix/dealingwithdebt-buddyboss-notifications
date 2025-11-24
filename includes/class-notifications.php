@@ -255,14 +255,14 @@ class Series_Subscribe_Notifications extends BP_Core_Notification_Abstract {
             
             if ( $screen == "app_push" || $screen == "web_push" ) {
                 $text = sprintf(
-                    esc_html__( 'New Article in %s: %s', 'series-subscribe' ),
-                    $series->name,
+                    esc_html__( '%s just published an article titled "%s". We look forward to your comments and feedback.', 'series-subscribe' ),
+                    $author->display_name,
                     $post->post_title
                 );
             }
             
             return array(
-                'title' => sprintf( __( 'New Article in %s', 'series-subscribe' ), $series->name ),
+                'title' => sprintf( __( 'New article in %s', 'series-subscribe' ), $series->name ),
                 'text' => $text,
                 'link' => $link,
             );
@@ -272,6 +272,10 @@ class Series_Subscribe_Notifications extends BP_Core_Notification_Abstract {
         if ( 'series_subscribe' === $component_name && 'author_new_post_published' === $component_action_name ) {
             $post = get_post( $item_id );
             $author = get_user_by( 'ID', $secondary_item_id );
+            
+            // Get series information from the post
+            $series_terms = wp_get_post_terms( $item_id, 'series' );
+            $series = !empty( $series_terms ) ? $series_terms[0] : null;
             
             if ( ! $post || ! $author ) {
                 return $content;
@@ -286,14 +290,22 @@ class Series_Subscribe_Notifications extends BP_Core_Notification_Abstract {
             $link = get_permalink( $item_id );
             
             if ( $screen == "app_push" || $screen == "web_push" ) {
-                $text = sprintf(
-                    esc_html__( 'New Article: %s', 'series-subscribe' ),
-                    $post->post_title
-                );
+                if ( $series ) {
+                    $text = sprintf(
+                        esc_html__( 'Check out the new article titled "%s" in the series %s. Looking forward to your comments and feedback.', 'series-subscribe' ),
+                        $post->post_title,
+                        $series->name
+                    );
+                } else {
+                    $text = sprintf(
+                        esc_html__( 'Check out the new article titled "%s". Looking forward to your comments and feedback.', 'series-subscribe' ),
+                        $post->post_title
+                    );
+                }
             }
             
             return array(
-                'title' => sprintf( __( '%s published a new article', 'series-subscribe' ), $author->display_name ),
+                'title' => sprintf( __( 'Your friend %s just published an article', 'series-subscribe' ), $author->display_name ),
                 'text' => $text,
                 'link' => $link,
             );

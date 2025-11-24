@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: Series and Author Subscribe
+ * Plugin Name: MFX Series Subscribe & Channels
  * Plugin URI: https://memberfix.rocks
- * Description: Allow users to subscribe to series and authors to receive BuddyBoss notifications when new posts are published in subscribed series, or from authors they follow.
- * Version: 1.1
+ * Description: Complete series management system with subscriptions, favorites, view tracking, popularity scoring, and Netflix-style content discovery channels. Includes BuddyBoss notifications, featured post carousel, category browsing, and personalized recommendations.
+ * Version: 2.0
  * Author: Memberfix
  * Text Domain: series-subscribe
  * Domain Path: /languages
@@ -63,10 +63,11 @@ class Series_Subscribe {
         add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
         add_action( 'wp_ajax_series_subscribe_toggle', array( $this, 'ajax_toggle_subscription' ) );
         add_action( 'wp_ajax_nopriv_series_subscribe_toggle', array( $this, 'ajax_toggle_subscription' ) );
-        
+        add_action( 'wp_ajax_series_rebuild_popularity', array( $this, 'ajax_rebuild_popularity' ) );
+
         // Hook into wp_after_insert_post to ensure taxonomy data is available
         add_action( 'wp_after_insert_post', array( $this, 'handle_post_after_insert' ), 10, 4 );
-        
+
         register_activation_hook( SERIES_SUBSCRIBE_PLUGIN_FILE, array( $this, 'activate' ) );
         register_deactivation_hook( SERIES_SUBSCRIBE_PLUGIN_FILE, array( $this, 'deactivate' ) );
     }
@@ -78,6 +79,12 @@ class Series_Subscribe {
         require_once SERIES_SUBSCRIBE_PLUGIN_DIR . 'includes/class-shortcodes.php';
         require_once SERIES_SUBSCRIBE_PLUGIN_DIR . 'includes/class-notifications.php';
         require_once SERIES_SUBSCRIBE_PLUGIN_DIR . 'includes/class-database.php';
+        require_once SERIES_SUBSCRIBE_PLUGIN_DIR . 'includes/class-view-tracking.php';
+        require_once SERIES_SUBSCRIBE_PLUGIN_DIR . 'includes/class-popularity.php';
+        require_once SERIES_SUBSCRIBE_PLUGIN_DIR . 'includes/class-favorites.php';
+        require_once SERIES_SUBSCRIBE_PLUGIN_DIR . 'includes/class-rest-api.php';
+        require_once SERIES_SUBSCRIBE_PLUGIN_DIR . 'includes/class-admin.php';
+        require_once SERIES_SUBSCRIBE_PLUGIN_DIR . 'includes/class-buddyboss-integration.php';
     }
 
     /**
@@ -91,6 +98,16 @@ class Series_Subscribe {
         new Series_Subscribe_Shortcodes();
         new Series_Subscribe_Notifications();
         new Series_Subscribe_Database();
+        Series_Subscribe_View_Tracking::instance();
+        Series_Subscribe_Popularity::instance();
+        Series_Subscribe_Favorites::instance();
+        Series_Subscribe_REST_API::instance();
+        Series_Subscribe_BuddyBoss_Integration::instance();
+
+        if ( is_admin() ) {
+            Series_Subscribe_Admin::instance();
+        }
+
         do_action( 'series_subscribe_init' );
     }
 
@@ -204,12 +221,59 @@ class Series_Subscribe {
     public function activate() {
         $db = new Series_Subscribe_Database();
         $db->create_tables();
+
+        // Set default options for channels
+        $defaults = array(
+            'channels_rows' => array(
+                'featured' => 1,
+                'favorites' => 1,
+                'recently_published' => 1,
+                'popular_articles' => 1,
+                'popular_series' => 1,
+                'categories' => 1,
+            ),
+            'popularity_weights' => array(
+                'views' => 1.0,
+                'comments' => 1.0,
+                'subscriptions' => 1.0,
+                'favorites' => 1.5,
+                'recency' => 0.5,
+            ),
+            'tracking_window_minutes' => 30,
+            'popularity_lookback_days' => 120,
+        );
+
+        $existing = get_option( 'series_subscribe_options', array() );
+        $merged = array_merge( $defaults, $existing );
+        update_option( 'series_subscribe_options', $merged );
+
+        // Schedule popularity cron
+        Series_Subscribe_Popularity::instance()->schedule_if_needed();
     }
 
     /**
      * Plugin deactivation hook.
      */
     public function deactivate() {
+        Series_Subscribe_Popularity::unschedule();
+    }
+
+    /**
+     * AJAX handler to rebuild popularity scores.
+     */
+    public function ajax_rebuild_popularity() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized' );
+        }
+
+        if ( ! wp_verify_nonce( $_POST['nonce'], 'series_rebuild_popularity' ) ) {
+            wp_send_json_error( 'Invalid nonce' );
+        }
+
+        $popularity = Series_Subscribe_Popularity::instance();
+        $popularity->rebuild_all();
+
+        wp_send_json_success( 'Popularity scores rebuilt successfully' );
     }
 
 }
