@@ -82,6 +82,22 @@
             link.appendChild(img);
             slide.appendChild(link);
 
+            // Create tags if item has tags (series categories for series, post tags for posts)
+            if (item.tags && item.tags.length > 0) {
+                const tagsWrap = createElement('div', { class: 'series-hero-carousel__tags' });
+                item.tags.forEach((tag, tagIndex) => {
+                    if (tagIndex > 0) {
+                        const separator = createElement('span', { class: 'series-hero-carousel__tag-separator' });
+                        separator.innerHTML = '●';
+                        tagsWrap.appendChild(separator);
+                    }
+                    const tagSpan = createElement('span', { class: 'series-hero-carousel__tag' });
+                    tagSpan.textContent = tag;
+                    tagsWrap.appendChild(tagSpan);
+                });
+                slide.appendChild(tagsWrap);
+            }
+
             // Create buttons for each slide
             const buttonsWrap = createElement('div', { class: 'series-hero-carousel__buttons' });
 

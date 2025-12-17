@@ -164,6 +164,10 @@ class Series_Subscribe_REST_API {
 
         $series_terms = wp_get_post_terms( $post->ID, 'series', array( 'fields' => 'names' ) );
 
+        // Get post tags
+        $post_tags = wp_get_post_terms( $post->ID, 'post_tag', array( 'fields' => 'names' ) );
+        $tags = is_wp_error( $post_tags ) ? array() : $post_tags;
+
         $is_subscribed = false;
         $is_favorited = false;
 
@@ -191,6 +195,7 @@ class Series_Subscribe_REST_API {
             'excerpt' => wp_trim_words( wp_strip_all_tags( get_the_excerpt( $post ) ), 24, '…' ),
             'image' => $thumb ? $thumb : '',
             'series' => is_wp_error( $series_terms ) ? array() : $series_terms,
+            'tags' => $tags,
             'isSubscribed' => $is_subscribed,
             'isFavorited' => $is_favorited,
             'views' => intval( get_post_meta( $post->ID, '_series_view_count_total', true ) ),
@@ -521,8 +526,14 @@ class Series_Subscribe_REST_API {
         $link = get_term_link( $term );
         $image = '';
 
-        // Get series icon
-        if ( function_exists( 'get_series_icon' ) ) {
+        // Check for custom carousel image first
+        $carousel_image_id = get_term_meta( $term->term_id, '_series_carousel_image', true );
+        if ( $carousel_image_id ) {
+            $image = wp_get_attachment_image_url( $carousel_image_id, 'large' );
+        }
+
+        // Fallback to series icon
+        if ( ! $image && function_exists( 'get_series_icon' ) ) {
             $icon_params = sprintf( 'fit_width=400&fit_height=300&series=%d&link=0&display=0&expand=true', $term->term_id );
             $icon_html = get_series_icon( $icon_params );
             if ( $icon_html ) {
@@ -544,6 +555,24 @@ class Series_Subscribe_REST_API {
             $is_favorited = $is_subscribed;
         }
 
+        // Get series groups (categories) for this series by checking which groups contain it
+        $series_groups = array();
+        if ( function_exists( 'get_series_in_group' ) ) {
+            $all_groups = get_terms( array(
+                'taxonomy' => 'series_group',
+                'hide_empty' => false,
+            ) );
+
+            if ( ! is_wp_error( $all_groups ) && ! empty( $all_groups ) ) {
+                foreach ( $all_groups as $group ) {
+                    $series_in_group = get_series_in_group( $group->term_id );
+                    if ( is_array( $series_in_group ) && in_array( $term->term_id, $series_in_group, true ) ) {
+                        $series_groups[] = $group->name;
+                    }
+                }
+            }
+        }
+
         return array(
             'id' => $term->term_id,
             'type' => 'series',
@@ -552,6 +581,7 @@ class Series_Subscribe_REST_API {
             'excerpt' => $term->description ? wp_trim_words( $term->description, 24, '…' ) : '',
             'image' => $image,
             'series' => array( $term->name ),
+            'tags' => $series_groups,
             'isSubscribed' => $is_subscribed,
             'isFavorited' => $is_favorited,
             'views' => 0,

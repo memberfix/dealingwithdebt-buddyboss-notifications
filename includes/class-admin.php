@@ -52,6 +52,7 @@ class Series_Subscribe_Admin {
     public function enqueue_admin_scripts( $hook ) {
         global $post;
 
+        // Enqueue for post edit screens
         if ( $hook === 'post.php' || $hook === 'post-new.php' ) {
             if ( 'post' === $post->post_type ) {
                 wp_enqueue_media();
@@ -98,6 +99,51 @@ class Series_Subscribe_Admin {
                     });
                 " );
             }
+        }
+
+        // Enqueue for series term edit screens
+        if ( $hook === 'term.php' || $hook === 'edit-tags.php' ) {
+            wp_enqueue_media();
+            wp_add_inline_script( 'media-upload', "
+                jQuery(document).ready(function($) {
+                    var seriesMediaUploader;
+
+                    $('#series_carousel_image_button').on('click', function(e) {
+                        e.preventDefault();
+
+                        if (seriesMediaUploader) {
+                            seriesMediaUploader.open();
+                            return;
+                        }
+
+                        seriesMediaUploader = wp.media({
+                            title: 'Select Carousel Image',
+                            button: {
+                                text: 'Use this image'
+                            },
+                            multiple: false
+                        });
+
+                        seriesMediaUploader.on('select', function() {
+                            var attachment = seriesMediaUploader.state().get('selection').first().toJSON();
+                            $('#series_carousel_image_id').val(attachment.id);
+                            $('#series_carousel_image_preview').attr('src', attachment.url).show();
+                            $('#series_carousel_image_button').text('Change Image');
+                            $('#series_carousel_image_remove').show();
+                        });
+
+                        seriesMediaUploader.open();
+                    });
+
+                    $('#series_carousel_image_remove').on('click', function(e) {
+                        e.preventDefault();
+                        $('#series_carousel_image_id').val('');
+                        $('#series_carousel_image_preview').attr('src', '').hide();
+                        $('#series_carousel_image_button').text('Select Image');
+                        $(this).hide();
+                    });
+                });
+            " );
         }
     }
 
@@ -513,6 +559,8 @@ class Series_Subscribe_Admin {
      */
     public function add_featured_series_field( $term, $taxonomy ) {
         $featured = get_term_meta( $term->term_id, '_series_featured', true );
+        $featured_image_id = get_term_meta( $term->term_id, '_series_carousel_image', true );
+        $featured_image_url = $featured_image_id ? wp_get_attachment_image_url( $featured_image_id, 'medium' ) : '';
         ?>
         <tr class="form-field">
             <th scope="row" valign="top">
@@ -524,6 +572,30 @@ class Series_Subscribe_Admin {
                     <?php esc_html_e( 'Mark as Featured Series', 'series-subscribe' ); ?>
                 </label>
                 <p class="description"><?php esc_html_e( 'Featured series will appear in the featured carousel.', 'series-subscribe' ); ?></p>
+            </td>
+        </tr>
+        <tr class="form-field">
+            <th scope="row" valign="top">
+                <label><?php esc_html_e( 'Carousel Image', 'series-subscribe' ); ?></label>
+            </th>
+            <td>
+                <div id="series_carousel_image_wrapper">
+                    <input type="hidden" id="series_carousel_image_id" name="series_carousel_image_id" value="<?php echo esc_attr( $featured_image_id ); ?>" />
+                    <?php if ( $featured_image_url ) : ?>
+                        <img id="series_carousel_image_preview" src="<?php echo esc_url( $featured_image_url ); ?>" style="max-width: 200px; display: block; margin-bottom: 10px;" />
+                    <?php else : ?>
+                        <img id="series_carousel_image_preview" src="" style="max-width: 200px; display: none; margin-bottom: 10px;" />
+                    <?php endif; ?>
+                    <button type="button" class="button" id="series_carousel_image_button">
+                        <?php echo $featured_image_url ? esc_html__( 'Change Image', 'series-subscribe' ) : esc_html__( 'Select Image', 'series-subscribe' ); ?>
+                    </button>
+                    <?php if ( $featured_image_url ) : ?>
+                        <button type="button" class="button" id="series_carousel_image_remove" style="margin-left: 5px;"><?php esc_html_e( 'Remove Image', 'series-subscribe' ); ?></button>
+                    <?php else : ?>
+                        <button type="button" class="button" id="series_carousel_image_remove" style="margin-left: 5px; display: none;"><?php esc_html_e( 'Remove Image', 'series-subscribe' ); ?></button>
+                    <?php endif; ?>
+                </div>
+                <p class="description"><?php esc_html_e( 'This image will be used in the shortcode. If not set, the series icon will be used as fallback.', 'series-subscribe' ); ?></p>
             </td>
         </tr>
         <?php
@@ -541,6 +613,16 @@ class Series_Subscribe_Admin {
             update_term_meta( $term_id, '_series_featured', '1' );
         } else {
             delete_term_meta( $term_id, '_series_featured' );
+        }
+
+        // Save carousel image
+        if ( isset( $_POST['series_carousel_image_id'] ) ) {
+            $image_id = intval( $_POST['series_carousel_image_id'] );
+            if ( $image_id > 0 ) {
+                update_term_meta( $term_id, '_series_carousel_image', $image_id );
+            } else {
+                delete_term_meta( $term_id, '_series_carousel_image' );
+            }
         }
     }
 }
